@@ -101,9 +101,14 @@ ENV/
 .mypy_cache/
 
 # files
-.xlsx
-.docx
-.doc
-.png
+*.xlsx
+*.docx
+*.doc
+*.png
 
-.idea/
+*.idea/
+*.DS_Store
+*.pdf
+*.xls
+input/
+*.zip
