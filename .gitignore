@@ -105,3 +105,5 @@ ENV/
 .docx
 .doc
 .png
+
+.idea/

@@ -5,7 +5,7 @@ import datetime
 import numpy as np
 import MySQLdb
 import math
-from analyze.hotel_sensor_config import sensor_config
+from analyze_scripts.hotel_sensor_config import sensor_config
 
 input_path = '../input/'
 
@@ -14,7 +14,8 @@ def load_data(date):
     db = MySQLdb.connect(host='218.17.171.90',
                          user='dingzhiwen',
                          passwd='Dzw@123456',
-                         db='siat_iot')
+                         db='siat_iot',
+                         charset='utf8')
     cursor = db.cursor()
     cursor.execute("select tb2.eui,tb2.temperature 温度,tb2.humidity 湿度, tb2.batt 电量,tb2.current 电流,tb2.voltage 电压,tb2.power 功率,tb2.ts 获取时间,tb1.name 传感器名称,tb3.name 所属设备,tb4.name 所属酒店\
                             from tb_sensor_data tb2 LEFT JOIN tb_sensor tb1 on tb1.code = tb2.eui LEFT JOIN tb_equipment tb3 on tb3.equipment_id = tb1.equipment_id \
@@ -115,12 +116,11 @@ def load_threshold(file_name='03-09.xlsx'):
 err_code = {0: 'normal', 1: 'error', -1: 'missing'}
 
 
-def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date().strftime('%Y-%m-%d')):
+def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), interval_period=60):
     """
     err_code:   0 normal    1 error -1 missing
 
-    :param file_name:
-    :param threshold_file:
+    :param interval:
     :param date:
     :return:
     """
@@ -201,22 +201,18 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                 times = pd.to_datetime(times)
                 msgs = []
                 if len(times) > 1:
+                    """
+                    缺失丢包分析
+                    """
                     # 获取时间频率判断 平均获取频率 增加首尾时间
 
                     _discrete_loss_times = 0  # 离散丢包次数
                     _total_loss_time = 0  # 缺失总时间
 
-                    # second_delta = (times[0] - datetime.datetime.strptime(date, '%Y-%m-%d')).total_seconds()
                     second_delta = 0
                     for i in range(1, len(times)):
                         delta = times[i] - times[i - 1]
-                        # print(delta)
                         second_delta += delta.total_seconds()
-                        # print(second_delta)
-                    # print(len(times))
-                    # second_delta += (datetime.datetime.strptime(date + ' 23:59:59', '%Y-%m-%d %H:%M:%S') - times[
-                    #     len(times) - 1]).total_seconds()
-                    # avg_minutes = (second_delta / (len(times) - 1 + 2)) / 60
                     avg_minutes = (second_delta / (len(times) - 1)) / 60
                     msgs.append(
                         {'status': 'red', 'msg': '\n该设备平均获取时间频率为: ' + str(round(avg_minutes, 3)) + '分钟\n'})
@@ -233,25 +229,44 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                     lost_count = 0
                     # 开始丢包时间
                     _start_loss = 0
-                    # _end_loss = 1
                     _start_loss_time = 0
                     _end_loss_time = 0
                     _continuous_lost_flag = False  # 是否连续丢包标记符
+
+                    # 每个间隔查看丢包丢包情况
+                    _packet_received_count = 1
+                    start_time_flag = times[0]
+                    for i in range(1, len(times)):
+                        _packet_lost_count = 0  # 丢包数量计数
+                        if (times[i] - start_time_flag).total_seconds() < interval_period * 60:
+                            _packet_received_count += 1
+                            delta = times[i] - times[i - 1]
+                            if delta.total_seconds() > sensor_name['frequency']:
+                                _packet_lost_count += math.floor(
+                                    delta.total_seconds() / sensor_name['require_frequency']) - 1
+                        else:
+                            # 超过周期间隔,统计当前丢失情况
+                            _interval_time = (times[i] - start_time_flag).total_seconds()
+                            diff = _interval_time / sensor_name['require_frequency'] - _packet_received_count
+                            _packet_lost_rate = round(diff / _interval_time / sensor_name['require_frequency'], 2)
+                            msgs.append({'status': 'blue',
+                                         'msg': '在' + start_time_flag.strftime['%H:%M:%S'] + '至' + times[i].strftime(
+                                             '%H:%M:%S') + '时间中，丢包次数为: ' + str(_packet_lost_count) + ',丢包率为: ' + str(
+                                             _packet_lost_rate) + '\n'})
+                            _packet_lost_count = 0
+                            start_time_flag = times[i]
+                            _packet_received_count = 0
+
                     for i in range(0, len(times)):
                         _is_loss_flag = 0  # 是否重复结算连续丢包
-                        # print(delta)
-                        # second_delta += delta
-                        # print(delta.item())
                         if i == 0:
                             delta = times[i] - datetime.datetime.strptime(date, '%Y-%m-%d')
-                            if delta.total_seconds() > 6 * sensor_name['frequency']:
+                            if delta.total_seconds() > 3600:  # 大于1小时算缺失
                                 lost_count += math.ceil(delta.total_seconds() / sensor_name['require_frequency'])
                                 '''数据缺失情况'''
                                 msgs.append({'status': 'red',
-                                             'msg': '缺失数据时间大于' + str(
-                                                 math.floor(6 * sensor_name[
-                                                     'frequency'] / 60)) + '分钟时间为,' + date + ' 0:00:00' + ',' + times[
-                                                        i].strftime('%Y-%m-%d %H:%M:%S') + ',' + str(
+                                             'msg': '缺失数据时间大于1小时' + '分钟时间为,' + date + ' 0:00:00' + ',' + times[
+                                                 i].strftime('%Y-%m-%d %H:%M:%S') + ',' + str(
                                                  math.floor(delta.total_seconds() / 60)) + ' 分钟,' + str(
                                                  math.ceil(delta.total_seconds() / sensor_name[
                                                      'require_frequency'])) + '次\n'})
@@ -262,7 +277,7 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
 
                         if delta.total_seconds() > sensor_name['frequency']:
 
-                            if delta.total_seconds() > 6 * sensor_name['frequency']:
+                            if delta.total_seconds() > 3600:
                                 '''
                                 若缺失数据时间段包括丢包时间则先结算丢包时间
                                 '''
@@ -274,25 +289,22 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                                          'msg': '结束丢包时间为, ' + times[i - 1].strftime('%Y-%m-%d %H:%M:%S') + ',' + str(
                                              math.floor(
                                                  time_diff.total_seconds() / sensor_name[
-                                                     'require_frequency'])-1) + '次\n'})
+                                                     'require_frequency']) - 1) + '次\n'})
                                     _discrete_loss_times += math.floor(
                                         time_diff.total_seconds() / sensor_name['require_frequency']) - 1
                                 lost_count += math.ceil(delta.total_seconds() / sensor_name['require_frequency'])
 
                                 '''数据缺失情况'''
                                 msgs.append({'status': 'red',
-                                             'msg': '缺失数据时间大于' + str(
-                                                 math.floor(6 * sensor_name['frequency'] / 60)) + '分钟时间为,' + times[
-                                                        i - 1].strftime(
+                                             'msg': '缺失数据时间大于1小时' + '分钟时间为,' + times[
+                                                 i - 1].strftime(
                                                  '%Y-%m-%d %H:%M:%S') + ',' + times[i].strftime(
                                                  '%Y-%m-%d %H:%M:%S') + ',' + str(
                                                  math.floor(delta.total_seconds() / 60)) + ' 分钟,' + str(math.ceil(
                                                  delta.total_seconds() / sensor_name['require_frequency'])) + '次\n'})
                                 _total_loss_time += math.floor(delta.total_seconds() / 60)
                                 continue
-                            # lost_count += 1
 
-                            # _start_loss = 0
                             if _start_loss == 0:
                                 _start_loss = 1
                                 _start_loss_time = times[i - 1]
@@ -301,7 +313,6 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                                     {'status': 'blue',
                                      'msg': '开始丢包时间为, ' + times[i - 1].strftime('%Y-%m-%d %H:%M:%S') + ','})
                         elif delta.total_seconds() <= sensor_name['frequency']:
-                            # _end_loss=1
                             if _start_loss == 1:
                                 _start_loss = 0
                                 _end_loss_time = times[i - 1]
@@ -318,13 +329,9 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                                          math.floor(
                                              time_diff.total_seconds() / sensor_name[
                                                  'require_frequency']) - 1) + '次\n'})
-                        # print(_end_loss_time)
-                        # print(_start_loss_time)
                         if _end_loss_time is not 0 and _start_loss_time is not 0 and _is_loss_flag == 1:
                             time_diff = _end_loss_time - _start_loss_time
-                            # print(time_diff)
                             if time_diff.total_seconds() > 6 * sensor_name['frequency']:
-                                _is_loss_flag = 0
                                 _continuous_lost_flag = True
                                 msgs.append(
                                     {'status': 'normal',
@@ -336,16 +343,10 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                                          _count - 1) + '次' + '\n'
                                      })
 
-                        # square_error = square_error + (delta.total_seconds() / 60 - avg_minutes) ** 2
-                    # square_error = square_error / (len(times) - 1)
-
                     if not _continuous_lost_flag and lost_count != 0:
                         '''
                         没有连续丢包的情况
                         '''
-                        # msgs.append({'status': 'red', 'msg': '虽有数次丢包，但是均为离散丢包，没有丢包持续时间超过30分钟的情况。\n'})
-
-                    # msgs.append({'status': 'red', 'msg': '该设备获取时间方差为: ' + str(square_error) + '\n'})
 
                     '''与获取时间点相比计算缺失情况'''
                     now = datetime.datetime.now()
@@ -368,13 +369,6 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                         if delta.total_seconds() > 6 * sensor_name['frequency']:
                             lost_count += math.ceil(delta.total_seconds() / sensor_name['require_frequency'])
                             _total_loss_time += math.floor(delta.total_seconds() / 60)
-                            # msgs.append({'status': 'red',
-                            #              'msg': '缺失数据时间大于' + str(
-                            #                  math.floor(6 * sensor_name['frequency'] / 60)) + '分钟时间为,' + times[
-                            #                         -1].strftime(
-                            #                  '%Y-%m-%d %H:%M:%S') + ',' + date + ' 23:59:59' + ',' + str(
-                            #                  math.floor(delta.total_seconds() / 60)) + ' 分钟,' + str(math.ceil(
-                            #                  delta.total_seconds() / sensor_name['require_frequency'])) + '次\n'})
 
                             msgs.append({'status': 'red',
                                          'msg': '缺失数据时间大于' + str(
@@ -385,14 +379,6 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                                              delta.total_seconds() / sensor_name['require_frequency'])) + '次\n'})
 
                     '''计算丢包率'''
-                    # msgs.append({'status': 'red',
-                    #              'msg': '该设备丢包次数为: ' + str(lost_count) + '/' + str(math.ceil(
-                    #                  (now - datetime.datetime.strptime(date + ' 0:00:00',
-                    #                                                    '%Y-%m-%d %H:%M:%S')).total_seconds() /
-                    #                  sensor_name['require_frequency'])) + ',丢包率为: ' + str(round(lost_count / (math.ceil(
-                    #                  (now - datetime.datetime.strptime(date + ' 0:00:00',
-                    #                                                    '%Y-%m-%d %H:%M:%S')).total_seconds() /
-                    #                  sensor_name['require_frequency'])), 4)) + '\n'})
                     suppose_count = math.ceil(
                         (now - datetime.datetime.strptime(date + ' 0:00:00', '%Y-%m-%d %H:%M:%S')).total_seconds() /
                         sensor_name['require_frequency'])
@@ -401,9 +387,6 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
                     msgs.append({'status': 'red',
                                  'msg': '该设备接收记录次数为: ' + str(len(times)) + '/' + str(suppose_count) + ',丢包率为: ' + str(
                                      round((suppose_count - len(times)) / suppose_count, 4)) + '\n'})
-                    # msgs.append({'status': 'red',
-                    #              'msg': '该设备丢包记录次数为: ' + str(lost_count) + '/' + str(suppose_count) + ',丢包率为: ' + str(
-                    #                  round(lost_count / suppose_count, 4))+'\n'})
                     msgs.append({'status': 'red',
                                  'msg': '离散丢包次数为: ' + str(_discrete_loss_times) + ',缺失时间总共为: ' + str(
                                      _total_loss_time) + '分钟'})
@@ -432,8 +415,23 @@ def analyze_data(threshold_file='03-09.xlsx', date=datetime.datetime.now().date(
     return result
 
 
-# print(load_threshold('要求范围.xlsx'))
-# print(analyze_data('2018-1-9.xlsx', '要求范围.xlsx', '2018-01-09'))
+def analyze_data_time_interval(date, result, interval):
+    """
+    analyze lost packet within interval period
+
+    :param date:
+    :param result:
+    :param interval: interval times to analyze default 60min
+    :return:
+    """
+    df = load_data(date)
+    df.index = pd.to_datetime(df['获取时间'])
+    for key in sensor_config.keys():
+        for data in sensor_config[key]:
+            sensor_data = df[df['eui'] == data['eui']]
+            sensor_data = sensor_data[date]
+
+
 if __name__ == '__main__':
     # df = load_data('2018-01-26')
     # print(df.head())
