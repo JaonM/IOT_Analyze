@@ -5,12 +5,12 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
 from docx.shared import Inches
 from docx.shared import RGBColor
-from analyze import analyze
+from analyze_scripts import analyze
 import datetime
 import os
 import re
 from visualization.keep import draw_picture
-from analyze.hotel_sensor_config import sensor_config
+from analyze_scripts.hotel_sensor_config import sensor_config
 
 input_path = '../input/'
 
