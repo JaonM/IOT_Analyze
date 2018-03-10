@@ -14,8 +14,6 @@ from analyze.hotel_sensor_config import sensor_config
 
 input_path = '../input/'
 
-date = '2018-03-08'
-
 
 # sensor_config = {
 #     '中科能源': [
@@ -40,14 +38,6 @@ date = '2018-03-08'
 #         {'eui': '3430363064378007', 'frequency': 900}
 #     ]
 # }
-
-print("analyzing data please wait ...")
-result = analyze.analyze_data(date=date)
-print('analyzing finished ' + str(result))
-
-print("drawing pictures..")
-# draw_picture(date=date)
-print("drawing pictures finished")
 
 
 def create_report(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), total_result=None):
@@ -122,5 +112,15 @@ def create_report(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), tota
         document.save(date + ' ' + key + '丽思卡尔顿传感器分析报告' + '.docx')
 
 
-create_report(date, result)
-print('process finished')
+if __name__ == '__main__':
+    date_range = ['2018-03-08']
+    for date in date_range:
+        print("analyzing data please wait ...")
+        result = analyze.analyze_data(date=date)
+        print('analyzing finished ' + str(result))
+
+        print("drawing pictures..")
+        # draw_picture(date=date)
+        print("drawing pictures finished")
+        create_report(date, result)
+    print('process finished')
