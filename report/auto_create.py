@@ -113,7 +113,7 @@ def create_report(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), tota
 
 
 if __name__ == '__main__':
-    date_range = ['2018-03-08']
+    date_range = ['2018-03-10', '2018-03-11']
     for date in date_range:
         print("analyzing data please wait ...")
         result = analyze.analyze_data(date=date)

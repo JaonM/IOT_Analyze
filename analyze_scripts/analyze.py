@@ -116,7 +116,7 @@ def load_threshold(file_name='03-09.xlsx'):
 err_code = {0: 'normal', 1: 'error', -1: 'missing'}
 
 
-def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), interval_period=60):
+def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), interval_period=120):
     """
     err_code:   0 normal    1 error -1 missing
 
@@ -255,9 +255,9 @@ def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), inter
                                 msgs.append({'status': 'blue',
                                              'msg': '在' + start_time_flag.strftime('%H:%M:%S') + '至' + times[
                                                  i].strftime(
-                                                 '%H:%M:%S') + '时间中，应接收次数为: ' + str(
+                                                 '%H:%M:%S') + '时间中，应接收次数为' + str(
                                                  math.floor(_interval_time / sensor_name['require_frequency'])
-                                             ) + '实际接收次数为: ' + str(_packet_received_count) + ',丢包率为: ' + str(
+                                             ) + '，实际接收次数为' + str(_packet_received_count) + '，丢包率为' + str(
                                                  _packet_lost_rate) + '\n'})
                                 _packet_lost_count = 0
                                 start_time_flag = times[i]
@@ -265,13 +265,13 @@ def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), inter
                         else:
                             # 超过周期间隔,统计当前丢失情况
                             _interval_time = (times[i] - start_time_flag).total_seconds()
-                            diff = _interval_time / sensor_name['require_frequency'] - _packet_received_count
+                            diff = math.floor(_interval_time / sensor_name['require_frequency'] - _packet_received_count)
                             _packet_lost_rate = round(diff / (_interval_time / sensor_name['require_frequency']), 2)
                             msgs.append({'status': 'blue',
                                          'msg': '在' + start_time_flag.strftime('%H:%M:%S') + '至' + times[i].strftime(
-                                             '%H:%M:%S') + '时间中，应接收次数为: ' + str(
+                                             '%H:%M:%S') + '时间中，应接收次数为' + str(
                                              math.floor(_interval_time / sensor_name['require_frequency'])
-                                         ) + '实际接收次数为: ' + str(_packet_received_count) + ',丢包率为: ' + str(
+                                         ) + '，实际接收次数为' + str(_packet_received_count) + '，丢包率为' + str(
                                              _packet_lost_rate) + '\n'})
                             _packet_lost_count = 0
                             start_time_flag = times[i]
