@@ -22,7 +22,7 @@ def load_data(date):
                             LEFT JOIN tb_customer tb4 on tb4.customer_id = tb1.customer_id where (tb2.eui='9896830000000008' or tb2.eui='9896830000000002' or tb2.eui = '9896830000000003' \
                              or tb2.eui='9896830000000004' or tb2.eui = '9896830000000006' or tb2.eui = '3786E6ED0034004B' or \
                              tb2.eui = '3768B26900230053' or tb2.eui = '4768B269002B0059' or tb2.eui = '4768B269001F003F' or \
-                             tb2.eui='4778B269003B002F' or tb2.eui='3430363057376506' or tb2.eui='3430363067378B07' or tb2.eui = '3430363064378607' \
+                             tb2.eui='4778B269003B002F' or tb2.eui='3430363057376506' or tb2.eui='3430363064377B07' or tb2.eui = '3430363064378607' or tb2.eui='3430363067378B07'\
                              or tb2.eui='343036305D375E05' or tb2.eui = '3430363064378007') and tb2.ts >" + date + " ORDER BY ts asc")
     results = []
     for row in cursor.fetchall():
@@ -116,7 +116,7 @@ def load_threshold(file_name='03-09.xlsx'):
 err_code = {0: 'normal', 1: 'error', -1: 'missing'}
 
 
-def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), interval_period=120):
+def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), interval_period=60):
     """
     err_code:   0 normal    1 error -1 missing
 
@@ -250,8 +250,43 @@ def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), inter
                             # 统计最后一个
                             if i == len(times) - 1:
                                 _interval_time = (times[i] - start_time_flag).total_seconds()
-                                diff = math.floor(_interval_time / sensor_name['require_frequency']) - _packet_received_count
+                                diff = math.floor(
+                                    _interval_time / sensor_name['require_frequency']) - _packet_received_count
                                 _packet_lost_rate = round(diff / (_interval_time / sensor_name['require_frequency']), 2)
+                                if _packet_lost_rate > 0.3:
+                                    msgs.append({'status': 'red',
+                                                 'msg': '在' + start_time_flag.strftime('%H:%M:%S') + '至' + times[
+                                                     i].strftime(
+                                                     '%H:%M:%S') + '时间中，应接收次数为' + str(
+                                                     math.floor(_interval_time / sensor_name['require_frequency'])
+                                                 ) + '，实际接收次数为' + str(_packet_received_count) + '，丢包率为' + str(
+                                                     _packet_lost_rate) + '\n'})
+                                else:
+                                    msgs.append({'status': 'blue',
+                                                 'msg': '在' + start_time_flag.strftime('%H:%M:%S') + '至' + times[
+                                                     i].strftime(
+                                                     '%H:%M:%S') + '时间中，应接收次数为' + str(
+                                                     math.floor(_interval_time / sensor_name['require_frequency'])
+                                                 ) + '，实际接收次数为' + str(_packet_received_count) + '，丢包率为' + str(
+                                                     _packet_lost_rate) + '\n'})
+                                _packet_lost_count = 0
+                                start_time_flag = times[i]
+                                _packet_received_count = 0
+                        else:
+                            # 超过周期间隔,统计当前丢失情况
+                            _interval_time = (times[i] - start_time_flag).total_seconds()
+                            diff = math.floor(
+                                _interval_time / sensor_name['require_frequency'] - _packet_received_count)
+                            _packet_lost_rate = round(diff / (_interval_time / sensor_name['require_frequency']), 2)
+                            if _packet_lost_rate > 0.3:
+                                msgs.append({'status': 'red',
+                                             'msg': '在' + start_time_flag.strftime('%H:%M:%S') + '至' + times[
+                                                 i].strftime(
+                                                 '%H:%M:%S') + '时间中，应接收次数为' + str(
+                                                 math.floor(_interval_time / sensor_name['require_frequency'])
+                                             ) + '，实际接收次数为' + str(_packet_received_count) + '，丢包率为' + str(
+                                                 _packet_lost_rate) + '\n'})
+                            else:
                                 msgs.append({'status': 'blue',
                                              'msg': '在' + start_time_flag.strftime('%H:%M:%S') + '至' + times[
                                                  i].strftime(
@@ -259,20 +294,6 @@ def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), inter
                                                  math.floor(_interval_time / sensor_name['require_frequency'])
                                              ) + '，实际接收次数为' + str(_packet_received_count) + '，丢包率为' + str(
                                                  _packet_lost_rate) + '\n'})
-                                _packet_lost_count = 0
-                                start_time_flag = times[i]
-                                _packet_received_count = 0
-                        else:
-                            # 超过周期间隔,统计当前丢失情况
-                            _interval_time = (times[i] - start_time_flag).total_seconds()
-                            diff = math.floor(_interval_time / sensor_name['require_frequency'] - _packet_received_count)
-                            _packet_lost_rate = round(diff / (_interval_time / sensor_name['require_frequency']), 2)
-                            msgs.append({'status': 'blue',
-                                         'msg': '在' + start_time_flag.strftime('%H:%M:%S') + '至' + times[i].strftime(
-                                             '%H:%M:%S') + '时间中，应接收次数为' + str(
-                                             math.floor(_interval_time / sensor_name['require_frequency'])
-                                         ) + '，实际接收次数为' + str(_packet_received_count) + '，丢包率为' + str(
-                                             _packet_lost_rate) + '\n'})
                             _packet_lost_count = 0
                             start_time_flag = times[i]
                             _packet_received_count = 0
@@ -435,24 +456,69 @@ def analyze_data(date=datetime.datetime.now().date().strftime('%Y-%m-%d'), inter
     return result
 
 
-def analyze_data_time_interval(date, result, interval):
+def analyze_data_time_interval(date, interval=1):
     """
     analyze lost packet within interval period
 
     :param date:
-    :param result:
     :param interval: interval times to analyze default 60min
     :return:
     """
     df = load_data(date)
     df.index = pd.to_datetime(df['获取时间'])
     for key in sensor_config.keys():
+        results = []
         for data in sensor_config[key]:
             sensor_data = df[df['eui'] == data['eui']]
-            sensor_data = sensor_data[date]
+            try:
+                sensor_data = sensor_data[date]
+            except Exception as e:
+                print(e)
+            start_time = datetime.datetime.strptime(date + ' 0:00:00', '%Y-%m-%d %H:%M:%S')
+            end_time = start_time + datetime.timedelta(hours=interval)
+
+            sensor_data['time'] = pd.to_datetime(sensor_data['获取时间'])
+            receive_count = 0
+            for index, item in sensor_data.iterrows():
+                result = dict()
+
+                if start_time < item['time'] < end_time:
+                    receive_count += 1
+                else:
+                    result['eui'] = data['eui']
+                    result['start_time'] = start_time
+                    result['end_time'] = end_time
+                    result['require_count'] = math.floor(interval * 3600 / data['require_frequency'])
+                    result['received_count'] = receive_count
+                    result['lost_rate'] = round((math.floor(
+                        interval * 3600 / data['require_frequency']) - receive_count) / math.floor(
+                        interval * 3600 / data['require_frequency']), 2)
+                    start_time = end_time
+                    end_time = end_time + datetime.timedelta(hours=interval)
+                    receive_count = 0
+                    result['interval'] = 1
+
+                    results.append(result)
+            final = dict()
+            final['eui'] = data['eui']
+            final['start_time'] = end_time-datetime.timedelta(hours=interval)
+            final['end_time'] = end_time
+            final['require_count'] = math.floor(interval * 3600 / data['require_frequency'])
+            final['received_count'] = receive_count
+            final['lost_rate'] = round((math.floor(
+                interval * 3600 / data['require_frequency']) - receive_count) / math.floor(
+                interval * 3600 / data['require_frequency']), 2)
+            final['interval'] = 1
+            results.append(final)
+
+        df_result = pd.DataFrame(data=results,
+                                 columns=['eui', 'start_time','end_time','require_count', 'received_count', 'lost_rate', 'interval'])
+        df_result.to_csv('../report/' + key + ' ' + date + ' per ' + str(interval) + 'hour_lost_rate.csv', index=False,
+                         encoding='utf-8')
 
 
 if __name__ == '__main__':
     # df = load_data('2018-01-26')
     # print(df.head())
-    print(analyze_data(date='2018-01-29'))
+    for date in ['2018-03-15', '2018-03-16', '2018-03-17']:
+        analyze_data_time_interval(date, 1)

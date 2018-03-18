@@ -22,6 +22,7 @@ sensor_config = {
         {'eui': '343036305D375E05', 'frequency': 300, 'require_frequency': 300},
         {'eui': '3430363064378007', 'frequency': 300, 'require_frequency': 300},
         {'eui': '3430363057376506', 'frequency': 300, 'require_frequency': 300},
+        # {'eui': '3430363064377B07', 'frequency': 300, 'require_frequency': 300},
         {'eui': '3430363067378B07', 'frequency': 300, 'require_frequency': 300},
         {'eui': '3430363064378607', 'frequency': 300, 'require_frequency': 300},
     ]
